@@ -1,0 +1,10 @@
+.vscode
+artifacts
+cache
+artifacts-ovm
+cache-ovm
+config.secret.js
+/coverage
+/coverage.json
+
+/node_modules
