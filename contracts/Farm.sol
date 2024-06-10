@@ -27,11 +27,13 @@ contract Farm {
     struct PlotWaterLog {
         uint256 blockNumber;
         uint256 level; // max -> PLOT_MAX_WATER
+        uint256 changeRate; // storing last change rate for easier calculations - can be removed if front-end moves to event using
     }
 
     struct PlotView {
         address owner;
         Plant plant;
+        PlotWaterLog waterLog;
     }
 
     address private _farmSettings;
@@ -44,7 +46,7 @@ contract Farm {
     event HarvestNotEnoughWater(uint256 plotId, uint256 waterAbsorbed);
     event HarvestOvergrown(uint256 plotId);
     event HarvestSuccess(uint256 plotId);
-    event PlotWaterUpdate(uint256 plotId, uint256 blockNumber, uint256 level);
+    event PlotWaterUpdate(uint256 plotId, uint256 blockNumber, uint256 level, uint256 changeRate);
 
     constructor(
         address farmSettings,
@@ -73,9 +75,10 @@ contract Farm {
         uint256 plotMaxY = FarmSettings(_farmSettings).PLOT_AREA_MAX_Y();
 
         // TODO: cover plotWaterLog with tests
+        // if plot water log is not initiated, initiate it (plot gets MAX water if no surrounding plots are planted)
         if (plotWaterLog[plotId].blockNumber == 0) {
-            plotWaterLog[plotId] = PlotWaterLog(block.number, FarmSettings(_farmSettings).PLOT_MAX_WATER());
-            emit PlotWaterUpdate(plotId, block.number, FarmSettings(_farmSettings).PLOT_MAX_WATER());
+            plotWaterLog[plotId] = PlotWaterLog(block.number, FarmSettings(_farmSettings).PLOT_MAX_WATER(), 0);
+            emit PlotWaterUpdate(plotId, block.number, FarmSettings(_farmSettings).PLOT_MAX_WATER(), 0);
         }
 
         // need to initiate surrounding plot water logs due to possible plant placement
@@ -84,33 +87,37 @@ contract Farm {
         if (plotY > 0 && plotWaterLog[Utils.getUpperPlotId(plotId, plotMaxX)].blockNumber == 0) {
             plotWaterLog[Utils.getUpperPlotId(plotId, plotMaxX)] = PlotWaterLog(
                 block.number,
-                FarmSettings(_farmSettings).PLOT_MAX_WATER()
+                FarmSettings(_farmSettings).PLOT_MAX_WATER(),
+                0
             );
-            emit PlotWaterUpdate(plotId, block.number, FarmSettings(_farmSettings).PLOT_MAX_WATER());
+            emit PlotWaterUpdate(plotId, block.number, FarmSettings(_farmSettings).PLOT_MAX_WATER(), 0);
         }
 
         if (plotX < plotMaxX - 1 && plotWaterLog[Utils.getRightPlotId(plotId)].blockNumber == 0) {
             plotWaterLog[Utils.getRightPlotId(plotId)] = PlotWaterLog(
                 block.number,
-                FarmSettings(_farmSettings).PLOT_MAX_WATER()
+                FarmSettings(_farmSettings).PLOT_MAX_WATER(),
+                0
             );
-            emit PlotWaterUpdate(plotId, block.number, FarmSettings(_farmSettings).PLOT_MAX_WATER());
+            emit PlotWaterUpdate(plotId, block.number, FarmSettings(_farmSettings).PLOT_MAX_WATER(), 0);
         }
 
         if (plotY < plotMaxY - 1 && plotWaterLog[Utils.getLowerPlotId(plotId, plotMaxX)].blockNumber == 0) {
             plotWaterLog[Utils.getLowerPlotId(plotId, plotMaxX)] = PlotWaterLog(
                 block.number,
-                FarmSettings(_farmSettings).PLOT_MAX_WATER()
+                FarmSettings(_farmSettings).PLOT_MAX_WATER(),
+                0
             );
-            emit PlotWaterUpdate(plotId, block.number, FarmSettings(_farmSettings).PLOT_MAX_WATER());
+            emit PlotWaterUpdate(plotId, block.number, FarmSettings(_farmSettings).PLOT_MAX_WATER(), 0);
         }
 
         if (plotX > 0 && plotWaterLog[Utils.getLeftPlotId(plotId)].blockNumber == 0) {
             plotWaterLog[Utils.getLeftPlotId(plotId)] = PlotWaterLog(
                 block.number,
-                FarmSettings(_farmSettings).PLOT_MAX_WATER()
+                FarmSettings(_farmSettings).PLOT_MAX_WATER(),
+                0
             );
-            emit PlotWaterUpdate(plotId, block.number, FarmSettings(_farmSettings).PLOT_MAX_WATER());
+            emit PlotWaterUpdate(plotId, block.number, FarmSettings(_farmSettings).PLOT_MAX_WATER(), 0);
         }
     }
 
@@ -171,6 +178,10 @@ contract Farm {
 
     function getPlantByPlotId(uint256 plotId) public view returns (Plant memory) {
         return plotPlant[plotId];
+    }
+    
+    function getWaterLogByPlotId(uint256 plotId) public view returns (PlotWaterLog memory) {
+        return plotWaterLog[plotId];
     }
 
     function harvest(uint256 plotId) public returns (bool) {
@@ -271,132 +282,211 @@ contract Farm {
         return Utils.getHasGrowthSeason(season, Seed(seed).getGrowthSeasons());
     }
 
-    // returns neighbor neihboring plot total water absorption (up, right, down, left) reversed coordinate axis (smaller x/y is upper left corner)
-    function getSurroundingPlantAbsorption(
+    // returns neighbor neihboring plot total water absorption (up, right, down, left) reversed coordinate Y axis (smaller x/y is upper left corner)
+    function getSurroundingPlantAbsorbRates(
         uint256 plotId,
-        uint256 blocksElapsed,
         uint256 plotMaxX,
         uint256 plotMaxY,
+        // TODO later this can vary for different plants
         uint256 plantNeighborWaterAbsorbRate
     ) private view returns (uint256[4] memory) {
         if (blocksElapsed == 0) {
             return [uint256(0), uint256(0), uint256(0), uint256(0)];
         }
 
-        uint256[4] memory surroundingPlantAbsorption = [uint256(0), uint256(0), uint256(0), uint256(0)];
+        uint256[4] memory surroundingPlantAbsorbRates = [uint256(0), uint256(0), uint256(0), uint256(0)];
         (uint256 plotX, uint256 plotY) = Utils.getCoordinates(plotId, plotMaxX);
 
         if (plotY > 0 && plotPlant[Utils.getUpperPlotId(plotId, plotMaxX)].owner != address(0)) {
-            surroundingPlantAbsorption[0] += plantNeighborWaterAbsorbRate * blocksElapsed;
+            surroundingPlantAbsorbRates[0] += plantNeighborWaterAbsorbRate;
         }
 
         if (plotX < plotMaxX - 1 && plotPlant[Utils.getRightPlotId(plotId)].owner != address(0)) {
-            surroundingPlantAbsorption[1] += plantNeighborWaterAbsorbRate * blocksElapsed;
+            surroundingPlantAbsorbRates[1] += plantNeighborWaterAbsorbRate;
         }
         
         if (plotY < plotMaxY - 1 && plotPlant[Utils.getLowerPlotId(plotId, plotMaxX)].owner != address(0)) {
-            surroundingPlantAbsorption[2] += plantNeighborWaterAbsorbRate * blocksElapsed;
+            surroundingPlantAbsorbRates[2] += plantNeighborWaterAbsorbRate;
         }
 
         if (plotX > 0 && plotPlant[Utils.getLeftPlotId(plotId)].owner != address(0)) {
-            surroundingPlantAbsorption[3] += plantNeighborWaterAbsorbRate * blocksElapsed;
+            surroundingPlantAbsorbRates[3] += plantNeighborWaterAbsorbRate;
         }
 
-        return surroundingPlantAbsorption;
+        return surroundingPlantAbsorbRates;
+    }
+
+    function getPlotWaterChangeRate(uint256 plotId, uint256 plotMaxX, uint256 plotMaxY, uint256 plantNeighborWaterAbsorbRate, uint256 mainPlantWaterAbsorbRate) private view returns (uint256) {
+        uint256 changeRate = 0;
+
+        if (plotPlant[plotId].owner != address(0)) {
+            changeRate += mainPlantWaterAbsorbRate;
+        }
+
+        (uint256 plotX, uint256 plotY) = Utils.getCoordinates(plotId, plotMaxX);
+
+        if (plotY > 0 && plotPlant[Utils.getUpperPlotId(plotId, plotMaxX)].owner != address(0)) {
+            changeRate += plantNeighborWaterAbsorbRate;
+        }
+
+        if (plotX < plotMaxX - 1 && plotPlant[Utils.getRightPlotId(plotId)].owner != address(0)) {
+            changeRate += plantNeighborWaterAbsorbRate;
+        }
+        
+        if (plotY < plotMaxY - 1 && plotPlant[Utils.getLowerPlotId(plotId, plotMaxX)].owner != address(0)) {
+            changeRate += plantNeighborWaterAbsorbRate;
+        }
+
+        if (plotX > 0 && plotPlant[Utils.getLeftPlotId(plotId)].owner != address(0)) {
+            changeRate += plantNeighborWaterAbsorbRate;
+        }
+
+        return changeRate;
     }
 
     // returns plot plant water absorbed
-    function getPlotPlantAbsorption(uint256 plotId, uint256 blocksElapsed) private view returns (uint256) {
+    function getPlotPlantAbsorption(uint256 plotId, uint256 blocksElapsed, uint256 absorbRate) private view returns (uint256) {
         if (plotPlant[plotId].owner == address(0)) {
             return 0;
         }
 
-        return FarmSettings(_farmSettings).PLANT_WATER_ABSORB_RATE() * blocksElapsed;
+        return absorbRate * blocksElapsed;
+    }
+
+    // updated plot plant and surrounding plant water absrobed
+    // returns plot water left after absorption and current total absorb rate
+    function updatePlantWater(uint256 plotId, uint256 plotMaxX, uint256 mainPlantAbsorbRate, uint256[4] memory surroundingPlantsAbsorbRates, uint256 plotWaterLeft, uint256 blocksElapsed) private returns (uint256, uint256) {
+        uint256 totalAbsorbRate = mainPlantAbsorbRate + surroundingPlantsAbsorbRates[0] + surroundingPlantsAbsorbRates[1] + surroundingPlantsAbsorbRates[2] + surroundingPlantsAbsorbRates[3];
+
+        uint256 totalAbsorption = totalAbsorbRate * blocksElapsed;
+
+        if (waterAbsorbed > 0) {
+            uint256 availableWaterBlocks = plotWaterLeft / totalAbsorbRate;
+            uint256 waterBlocksAbsorbed = fullWaterBlocks >= blocksElapsed ? blocksElapsed : fullWaterBlocks;
+
+
+            plotPlant[plotId].waterAbsorbed += waterBlocksAbsorbed * mainPlantAbsorbRate;
+
+            if (surroundingPlantsAbsorbed[0] > 0) {
+                plotPlant[Utils.getUpperPlotId(plotId, plotMaxX)].waterAbsorbed += waterBlocksAbsorbed * surroundingPlantsAbsorbRates[0];
+            }
+
+            if (surroundingPlantsAbsorbed[1] > 0) {
+                plotPlant[Utils.getRightPlotId(plotId)].waterAbsorbed += waterBlocksAbsorbed * surroundingPlantsAbsorbRates[1];
+            }
+
+            if (surroundingPlantsAbsorbed[2] > 0) {
+                plotPlant[Utils.getLowerPlotId(plotId, plotMaxX)].waterAbsorbed += waterBlocksAbsorbed * surroundingPlantsAbsorbRates[2];
+            }
+
+            if (surroundingPlantsAbsorbed[3] > 0) {
+                plotPlant[Utils.getLeftPlotId(plotId)].waterAbsorbed += waterBlocksAbsorbed * surroundingPlantsAbsorbRates[3];
+            }
+
+            plotWaterLeft -= totalAbsorbRate * waterBlocksAbsorbed;
+        }
+
+        // Old method used with partial absorption calculation
+        // if (waterAbsorbed > 0) {
+        //     // 100000 multiplier due to solidity not supporting fractions
+        //     uint256 waterRatio = plotWaterLeft * 100000 / waterAbsorbed;
+
+        //     if (mainPlantAbsorbed > 0) {
+        //         uint256 plantAbsorbed = waterRatio >= 100000 ? mainPlantAbsorbed : waterRatio * mainPlantAbsorbed / 100000;
+        //         plotWaterLeft -= plantAbsorbed;
+        //         plotPlant[plotId].waterAbsorbed += plantAbsorbed;
+        //     }
+
+        //     if (surroundingPlantsAbsorbed[0] > 0) {
+        //         uint256 plantAbsorbed = waterRatio >= 100000 ? surroundingPlantsAbsorbed[0] : waterRatio * surroundingPlantsAbsorbed[0] / 100000;
+        //         plotWaterLeft -= plantAbsorbed;
+        //         plotPlant[Utils.getUpperPlotId(plotId, plotMaxX)].waterAbsorbed += plantAbsorbed;
+        //     }
+
+        //     if (surroundingPlantsAbsorbed[1] > 0) {
+        //         uint256 plantAbsorbed = waterRatio >= 100000 ? surroundingPlantsAbsorbed[1] : waterRatio * surroundingPlantsAbsorbed[1] / 100000;
+        //         plotWaterLeft -= plantAbsorbed;
+        //         plotPlant[Utils.getRightPlotId(plotId)].waterAbsorbed += plantAbsorbed;
+        //     }
+
+        //     if (surroundingPlantsAbsorbed[2] > 0) {
+        //         uint256 plantAbsorbed = waterRatio >= 100000 ? surroundingPlantsAbsorbed[2] : waterRatio * surroundingPlantsAbsorbed[2] / 100000;
+        //         plotWaterLeft -= plantAbsorbed;
+        //         plotPlant[Utils.getLowerPlotId(plotId, plotMaxX)].waterAbsorbed += plantAbsorbed;
+        //     }
+
+        //     if (surroundingPlantsAbsorbed[3] > 0) {
+        //         uint256 plantAbsorbed = waterRatio >= 100000 ? surroundingPlantsAbsorbed[3] : waterRatio * surroundingPlantsAbsorbed[3] / 100000;
+        //         plotWaterLeft -= plantAbsorbed;
+        //         plotPlant[Utils.getLeftPlotId(plotId)].waterAbsorbed += plantAbsorbed;
+        //     }
+
+        //     // due to rounding there might be some leftover water
+        //     if (waterRatio <= 100000 && plotWaterLeft > 0) {
+        //         if (mainPlantAbsorbed > 0) {
+        //             plotPlant[plotId].waterAbsorbed += 1;
+        //             plotWaterLeft -= 1;
+        //         }
+
+        //         if (plotWaterLeft > 0 && surroundingPlantsAbsorbed[0] > 0) {
+        //             plotPlant[Utils.getUpperPlotId(plotId, plotMaxX)].waterAbsorbed += 1;
+        //             plotWaterLeft -= 1;
+        //         }
+
+        //         if (plotWaterLeft > 0 && surroundingPlantsAbsorbed[1] > 0) {
+        //             plotPlant[Utils.getRightPlotId(plotId)].waterAbsorbed += 1;
+        //             plotWaterLeft -= 1;
+        //         }
+
+        //         if (plotWaterLeft > 0 && surroundingPlantsAbsorbed[2] > 0) {
+        //             plotPlant[Utils.getLowerPlotId(plotId, plotMaxX)].waterAbsorbed += 1;
+        //             plotWaterLeft -= 1;
+        //         }
+
+        //         if (plotWaterLeft > 0 && surroundingPlantsAbsorbed[3] > 0) {
+        //             plotPlant[Utils.getLeftPlotId(plotId)].waterAbsorbed += 1;
+        //             plotWaterLeft -= 1;
+        //         }
+        //     }
+        // }
+
+        return [plotWaterLeft, totalAbsorbRate];
     }
 
     // TODO: can be made more gas efficient by not accessing storage so often
     function updatePlotAndPlantWater(uint256 plotId, uint256 plotMaxX) private {
         uint256 blocksElapsed = block.number - plotWaterLog[plotId].blockNumber;
 
-        uint256[4] memory surroundingAbsorbed = getSurroundingPlantAbsorption(
+        uint256 neighborWaterAbsorbRate = FarmSettings(_farmSettings).PLANT_NEIGHBOR_WATER_ABSORB_RATE();
+        uint256 plotMaxY = FarmSettings(_farmSettings).PLOT_AREA_MAX_Y();
+
+        uint256[4] memory surroundingPlantsAbsorbRates = getSurroundingPlantAbsorbRates(
                 plotId,
-                blocksElapsed,
                 plotMaxX,
-                FarmSettings(_farmSettings).PLOT_AREA_MAX_Y(),
-                FarmSettings(_farmSettings).PLANT_NEIGHBOR_WATER_ABSORB_RATE()
+                plotMaxY,
+                neighborWaterAbsorbRate
             );
-        uint256 mainPlantAbsorbed = getPlotPlantAbsorption(plotId, blocksElapsed);
 
-        uint256 plotWaterLeft = FarmSettings(_farmSettings).PLOT_WATER_REGEN_RATE() * blocksElapsed + plotWaterLog[plotId].level;
-        uint256 waterAbsorbed = mainPlantAbsorbed + surroundingAbsorbed[0] + surroundingAbsorbed[1] + surroundingAbsorbed[2] + surroundingAbsorbed[3];
+        uint256 mainPlantWaterAbsorbRate = FarmSettings(_farmSettings).PLANT_WATER_ABSORB_RATE();
 
-        if (waterAbsorbed > 0) {
-            // 100000 multiplier due to solidity not supporting fractions
-            uint256 waterRatio = plotWaterLeft * 100000 / waterAbsorbed;
+        uint256 plotTotalWater = FarmSettings(_farmSettings).PLOT_WATER_REGEN_RATE() * blocksElapsed + plotWaterLog[plotId].level;
+        // uint256 mainPlantAbsorbed = getPlotPlantAbsorption(plotId, blocksElapsed, mainPlantWaterAbsorbRate);
 
-            if (mainPlantAbsorbed > 0) {
-                uint256 plantAbsorbed = waterRatio >= 100000 ? mainPlantAbsorbed : waterRatio * mainPlantAbsorbed / 100000;
-                plotWaterLeft -= plantAbsorbed;
-                plotPlant[plotId].waterAbsorbed += plantAbsorbed;
-            }
+        uint256 [plotWaterLeft, changeRate] = updatePlantWater(plotId, plotMaxX, mainPlantWaterAbsorbRate, surroundingPlantsAbsorbRates, plotTotalWater, blocksElapsed);
 
-            if (surroundingAbsorbed[0] > 0) {
-                uint256 plantAbsorbed = waterRatio >= 100000 ? surroundingAbsorbed[0] : waterRatio * surroundingAbsorbed[0] / 100000;
-                plotWaterLeft -= plantAbsorbed;
-                plotPlant[Utils.getUpperPlotId(plotId, plotMaxX)].waterAbsorbed += plantAbsorbed;
-            }
-
-            if (surroundingAbsorbed[1] > 0) {
-                uint256 plantAbsorbed = waterRatio >= 100000 ? surroundingAbsorbed[1] : waterRatio * surroundingAbsorbed[1] / 100000;
-                plotWaterLeft -= plantAbsorbed;
-                plotPlant[Utils.getRightPlotId(plotId)].waterAbsorbed += plantAbsorbed;
-            }
-
-            if (surroundingAbsorbed[2] > 0) {
-                uint256 plantAbsorbed = waterRatio >= 100000 ? surroundingAbsorbed[2] : waterRatio * surroundingAbsorbed[2] / 100000;
-                plotWaterLeft -= plantAbsorbed;
-                plotPlant[Utils.getLowerPlotId(plotId, plotMaxX)].waterAbsorbed += plantAbsorbed;
-            }
-
-            if (surroundingAbsorbed[3] > 0) {
-                uint256 plantAbsorbed = waterRatio >= 100000 ? surroundingAbsorbed[3] : waterRatio * surroundingAbsorbed[3] / 100000;
-                plotWaterLeft -= plantAbsorbed;
-                plotPlant[Utils.getLeftPlotId(plotId)].waterAbsorbed += plantAbsorbed;
-            }
-
-            // due to rounding there might be some leftover water
-            if (waterRatio <= 100000 && plotWaterLeft > 0) {
-                if (mainPlantAbsorbed > 0) {
-                    plotPlant[plotId].waterAbsorbed += 1;
-                    plotWaterLeft -= 1;
-                }
-
-                if (plotWaterLeft > 0 && surroundingAbsorbed[0] > 0) {
-                    plotPlant[Utils.getUpperPlotId(plotId, plotMaxX)].waterAbsorbed += 1;
-                    plotWaterLeft -= 1;
-                }
-
-                if (plotWaterLeft > 0 && surroundingAbsorbed[1] > 0) {
-                    plotPlant[Utils.getRightPlotId(plotId)].waterAbsorbed += 1;
-                    plotWaterLeft -= 1;
-                }
-
-                if (plotWaterLeft > 0 && surroundingAbsorbed[2] > 0) {
-                    plotPlant[Utils.getLowerPlotId(plotId, plotMaxX)].waterAbsorbed += 1;
-                    plotWaterLeft -= 1;
-                }
-
-                if (plotWaterLeft > 0 && surroundingAbsorbed[3] > 0) {
-                    plotPlant[Utils.getLeftPlotId(plotId)].waterAbsorbed += 1;
-                    plotWaterLeft -= 1;
-                }
-            }
-        }
+        uint256 waterChangeRate = getPlotWaterChangeRate(
+            plotId,
+            plotMaxX,
+            plotMaxY,
+            neighborWaterAbsorbRate,
+            mainPlantWaterAbsorbRate
+        );
 
         plotWaterLog[plotId].level = plotWaterLeft > FarmSettings(_farmSettings).PLOT_MAX_WATER() ? FarmSettings(_farmSettings).PLOT_MAX_WATER() : plotWaterLeft;
         plotWaterLog[plotId].blockNumber = block.number;
+        plotWaterLog[plotId].changeRate = waterChangeRate;
 
-        emit PlotWaterUpdate(plotId, block.number, plotWaterLog[plotId].level);
+        emit PlotWaterUpdate(plotId, block.number, plotWaterLog[plotId].level, waterChangeRate);
     }
 
     function clearUserPlant(uint256 plotId) private {
@@ -413,15 +503,17 @@ contract Farm {
 
     // APP HELPER FUNCTIONS
 
-    function getPlotView(uint256 leftUpperCornerPlotId) public view returns (PlotView[49] memory) {
+    // 49 plots in a 7x7 grid
+    // left lower corrner is named after app view - basicall left corner (or left lower if rotated) 
+    function getPlotView(uint256 leftLowerCornerPlotId) public view returns (PlotView[49] memory) {
         PlotView[49] memory plots;
         uint256 plotMaxX = FarmSettings(_farmSettings).PLOT_AREA_MAX_X();
 
-        (uint256 leftUpperX, uint256 leftUpperY) = Utils.getCoordinates(leftUpperCornerPlotId, plotMaxX);
+        (uint256 leftLowerX, uint256 leftLowerY) = Utils.getCoordinates(leftLowerCornerPlotId, plotMaxX);
         for (uint256 dy = 0; dy < 7; dy += 1) {
             for (uint256 dx = 0; dx < 7; dx += 1) {
-                uint256 x = leftUpperX + dx;
-                uint256 y = leftUpperY + dy;
+                uint256 x = leftLowerX + dx;
+                uint256 y = leftLowerY + dy;
                 uint256 plotId = Utils.getPlotIdFromCoordinates(x, y, plotMaxX);
 
                 address owner = address(0);
@@ -430,9 +522,67 @@ contract Farm {
                 }
 
                 Plant memory plant_ = getPlantByPlotId(plotId);
-                plots[dx + dy * 7] = PlotView(owner, plant_);
+                PlotWaterLog memory waterLog_ = getWaterLogByPlotId(plotId);
+                plots[dx + dy * 7] = PlotView(owner, plant_, waterLog_);
             }
          }
         return plots;
+    }
+
+    // Used for plant water consumption calculation in front-end if the plant is on the edge of the viewable main plot
+
+    // argument is same as getPlotView the leftUpperCorner of 7x7
+    // returnes 0-6 - 7 plots along Y line before main plots
+    // returnes 7-13 - 7 plots along Y line after main plots
+    // returnes 14-20 - 7 plots along X line before main plots
+    // returnes 21-27 - 7 plots along X line after main plots
+
+    function getSurroundingWaterLogs(uint256 leftLowerCornerPlotId) public view returns (PlotWaterLog[28] memory) {
+        PlotWaterLog[28] memory plotWaterLogs;
+        uint256 plotMaxX = FarmSettings(_farmSettings).PLOT_AREA_MAX_X();
+
+        (uint256 leftLowerX, uint256 leftLowerY) = Utils.getCoordinates(leftLowerCornerPlotId, plotMaxX);
+
+        if (leftLowerX > 0) {
+            // Y axis parrallel before
+            for (uint256 dy = 0; dy < 7; dy += 1) {
+                uint256 plotId = Utils.getPlotIdFromCoordinates(leftLowerX - 1, leftLowerY + dy, plotMaxX);
+        
+                plotWaterLogs[dy] = getWaterLogByPlotId(plotId);
+            }
+        }
+
+        if (leftLowerX < plotMaxX) {
+            // Y axis parrallel after
+            for (uint256 dy = 0; dy < 7; dy += 1) {
+                uint256 plotId = Utils.getPlotIdFromCoordinates(leftLowerX + 1, leftLowerY + dy, plotMaxX);
+        
+                // next line + 6
+                plotWaterLogs[dy + 6] = getWaterLogByPlotId(plotId);
+            }
+        }
+
+
+        if (leftLowerY > 0) {
+            // X axis parrallel before
+            for (uint256 dx = 0; dx < 7; dx += 1) {
+                uint256 plotId = Utils.getPlotIdFromCoordinates(leftLowerX + dx , leftLowerY - 1, plotMaxX);
+        
+                // next line + 6
+                plotWaterLogs[dx + 13] = getWaterLogByPlotId(plotId);
+            }
+        }
+
+        if (leftLowerY <  FarmSettings(_farmSettings).PLOT_AREA_MAX_Y()) {
+            // X axis parrallel after
+            for (uint256 dx = 0; dx < 7; dx += 1) {
+                uint256 plotId = Utils.getPlotIdFromCoordinates(leftLowerX + dx , leftLowerY + 1, plotMaxX);
+        
+                // next line + 6
+                plotWaterLogs[dx + 20] = getWaterLogByPlotId(plotId);
+            }
+        }
+
+        return plotWaterLogs;
     }
 }

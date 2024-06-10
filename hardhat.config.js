@@ -8,9 +8,9 @@ module.exports = {
   defaultNetwork: 'hardhat',
   networks: {
     hardhat: {},
-    polygonMumbai: {
-      url: 'https://rpc-mumbai.maticvigil.com',
-      chainId: 80001,
+    polygonAmoy: {
+      url: 'https://rpc-amoy.polygon.technology/',
+      chainId: 80002,
       accounts: [testnetPrivateKey]
     },
   },

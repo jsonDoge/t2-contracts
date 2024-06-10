@@ -38,24 +38,31 @@ Contract used to manage them and contain the state of plants is the Farm.
 
 At the moment of writing hardhat supports up to 0.8.22 (currently 0.8.22v used in code)
 
-// contracts deployed with 0.7.6v
-- Stable token:  0x451c4001eb9E7D3e30DD4Ec5Fda820f6fb2C3DD5
-- Farm settings:  0xDB56aa600FAe785F5EBcB1175eEee9913D088aAa
-- Farm:  0x1308253ca456bFad6B536B29A800886C2aE49E5B
-- Plot:  0x3c76a3B25899adB0D74bEC0a7b1505220c2DF917
-- Weed product:  0x91CdCF81008f0b0A827E20f0570D9b07a170CE90
-- Potato seed:  0xF6F44ede48Fc55726D13F884C3b3F47eAe276eCc
-- Potato product:  0x3bb9950ee421201e9bE9313C00a99Fb44Afa5cb2
-- Potato dish:  0x7b6C85AE28F6cfcEa5f34Fb3b8367B0c344668BE
-- Corn seed:  0x1d3773FFD3095fA37eB819D0510f82854871d9f8
-- Corn product:  0x3Ce9f52EA05EA3F5f08d80a9c748C6010dd97560
-- Corn dish:  0xc75474fe1E08386F881822872045dEAb818857de
-- Carrot seed:  0x45c54384D15796b494eCA71aa205ad90c3b9d940
-- Carrot product:  0xa5bA5adB5D949150ecaDB2E1f4bEE9A47CD62370
-- Carrot dish:  0x413b118eD98AE2F58d69F1aAf55Fd4a1f9922649
+// contracts deployed with 0.8.22v
+- STABLE TOKEN: 0xF2CFDd6dfD0332E55EDc3e0D6D93331940087Cfd
+- FARM SETTINGS: 0xe62C999737E070cEA40352a1c327baC0EF9195be
+- FARM: 0x5d14D674b51bf6F755902c378818b474df120595
+- PLOT: 0x40711209614420Ab5Db08625832D2E0194E472F4
+- POTATO SEED: 0x9Fa4FA7360d7C370EBf4A8EFfA98fc2dAC1F585e
+- POTATO PRODUCT: 0x07701406AB728Ca70b260cE8b7507C613602C079
+- POTATO DISH: 0x11D5Db90973beA9fA3Af1D96eF900B4681b44E7A
+- CORN SEED: 0x9Ff634963d636Da541398C9452573794FB6623ee
+- CORN PRODUCT: 0x1b93113DAfadd27bf2906EeBC6B3eb8a5dc3Ddf7
+- CORN DISH: 0xE076155eBA650310c20761F212A16B8146C9e1A7
+- CARROT SEED: 0xB2c37799cfC3d92679580DeA1904996FB92d9008
+- CARROT PRODUCT: 0xCa4642e7682f8BA6DD2cd7f4A76B60588F92d3f4
+- CARROT DISH: 0xDd487A4075e99bDf737057aF2C63C1ABd9E249F5
+- WEED PRODUCT: 0x83585F05038035E87C6AfA4D6400a87745eAB8BF
+- WEED DISH: 0x1566B3A7064cF933311C08379BBD869B68e4736B
+
+## Water
+
+  - For simpler math plants are always absorbing water as long as they are planted (to avoid the need to recalculated the entire map each time)
+  - Plots water level is not in sync in contract, one will only be updated once some action was taken that involves it (plant/harvest)
+  
 
 ## NOTES:
 
-- Currently the game deployed only on Polygon Mumbai testnet.  
+- Currently the game deployed only on Polygon Amoy testnet.  
 - Weed is a special plant whose product can only be obtained by overgrowing any other plant.
 - Crafting dishes requires correct product array order (bug -> feature, allows for more recipes)
