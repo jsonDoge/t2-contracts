@@ -38,7 +38,7 @@ library Utils {
     }
 
     function getUpperPlotId(uint256 plotId, uint256 maxX) public pure returns (uint256) {
-        return plotId - maxX;
+        return plotId + maxX;
     }
 
     function getRightPlotId(uint256 plotId) public pure returns (uint256) {
@@ -46,7 +46,7 @@ library Utils {
     }
 
     function getLowerPlotId(uint256 plotId, uint256 maxX) public pure returns (uint256) {
-        return plotId + maxX;
+        return plotId - maxX;
     }
 
     function getLeftPlotId(uint256 plotId) public pure returns (uint256) {

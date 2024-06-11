@@ -211,8 +211,9 @@ describe('Harvest', function () {
 
       expect(args.plotId.toString()).to.equal(plotId);
 
-      // plotId is 1, so there is no plot above it (plant gan absorb only from 4 plots)
-      expect(args.waterAbsorbed.toString()).to.equal('4');
+      // plotId is 1, so there is no plot above it
+      // (plant would absorb only from 4 plots - but no partial absorption has been disabled)
+      expect(args.waterAbsorbed.toString()).to.equal('0');
 
       // verify plant still exists
       const plantIds = await contracts.farm.getUserPlantIds(account.address);
@@ -223,14 +224,17 @@ describe('Harvest', function () {
       const options = {
         plotWaterRegenRate: 1,
         plantWaterAbsorbRate: 5,
+        plantNeighborWaterAbsorbRate: 5,
         plotMaxWater: 249,
         potatoGrowthDuration: 1000,
         potatoMinWater: 1000 * 5,
       };
 
-      // main plot water = 249 + 1 * (blocks plant to harvest) = 249 + 1000 = 1249
-      // neighbor plot water = 249 + 1 * (blocks plant to harvest) = 249 + 1000 = 1249 (3 plots around)
+      // main plot water = 249 + 1 * (blocks plant -> harvest) = 249 + (1000 * 1) = 1249
+      // single neighbor plot water = 249 + 1 * (blocks plant -> harvest) = 249 + (1000 * 1) = 1249 (3 plots around)
       // total water available = 1249 + 1249 * 3 = 4996 (plant absorbs faster than regen)
+      // total absorbed = 1249 / 5 = 249 (round down solidity math) - 249 * 5 = 1245
+      // only 249 blocks worth of water is absorbed regeneration too slow
 
       contracts = await setupContracts(options);
       [account] = await ethers.getSigners();
@@ -250,7 +254,7 @@ describe('Harvest', function () {
       const { args } = contracts.farm.interface.parseLog(event);
 
       expect(args.plotId.toString()).to.equal(plotId);
-      expect(args.waterAbsorbed.toString()).to.equal('4996');
+      expect(args.waterAbsorbed.toString()).to.equal('4980');
     });
 
     it('Should fail harvest plot - not enough water maximum neighbor plant number', async function () {
@@ -268,7 +272,7 @@ describe('Harvest', function () {
 
       await mintAndApproveTokens(contracts, account);
 
-      // upper, right, lower, left, center
+      // upper, right, lower, left, center - order important
       const plotIds = ['1', '1002', '2001', '1000', '1001'];
 
       await buyApprovePlantPotato(contracts, account, plotIds[0]);
@@ -306,26 +310,17 @@ describe('Harvest', function () {
       // 100 + 75 + 50 + 25 = 250 from their own centers (center plant neighbor plots)
 
       // AFTER CENTER STARTS ABSORBING
-      // left in center (50 + 20) * 5/21 + regenerated 1000 * 5/21 = 254 goes to center plant [rounded]
-      // extra due to rounding: center +1, upper +1, right +1
+      // left in center (50 + 20) * 5/21 + regenerated 1000 * 5/21 = 251 goes to center plant [rounded]
       
-      // from upper neighbor (150 + 20) * 4/9 + 1000 * 4/9 = 520 goes to center plant [rounded]
-      // extra due to rounding: (own plot center) upper +1
+      // from upper neighbor (150 + 20) * 4/9 + 1000 * 4/9 = 519 goes to center plant [rounded]
+      // from right neighbor (175 + 15) * 4/9 + 1000 * 4/9 = 527 goes to center plant [rounded]
+      // from lower neighbor (200 + 10) * 4/9 + 1000 * 4/9 = 536 goes to center plant [rounded]
+      // from left neighbor (225 + 5) * 4/9 + 1000 * 4/9 = 545 goes to center plant [rounded]
 
-      // from right neighbor (175 + 15) * 4/9 + 1000 * 4/9 = 528 goes to center plant [rounded]
-      // extra due to rounding: (own plot center) right +1
+      // total water absorbed = 251 + 519 + 527 + 536 + 545 = 2378
 
-      // from lower neighbor (200 + 10) * 4/9 + 1000 * 4/9 = 537 goes to center plant [rounded]
-      // extra due to rounding: (own plot center) lower +1
-
-      // from left neighbor (225 + 5) * 4/9 + 1000 * 4/9 = 546 goes to center plant [rounded]
-      // extra due to rounding: (own plot center) left +1
-
-      // total water absorbed = 254 + 519 + 528 + 537 + 546 = 2384 + 1 (due to rounding)
-      // due to rounding another 5 water may be absorbed
-
-      // no neighbors 5000 - with neighbors 2386
-      expect(args.waterAbsorbed.toString()).to.equal('2386');
+      // no neighbors 5000 - with neighbors 2378
+      expect(args.waterAbsorbed.toString()).to.equal('2378');
     });
 
     // TODO: cleanup test
