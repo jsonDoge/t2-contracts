@@ -138,26 +138,31 @@ contract Farm {
         // update water absorption of surrounding plots
         // TODO: investigate why upside down
 
+        uint256 plotWaterLeft;
         if (plotY < FarmSettings(_farmSettings).PLOT_AREA_MAX_Y() - 1) {
-            updatePlotAndPlantWater(Utils.getUpperPlotId(plotId, plotMaxX), plotMaxX);
+            plotWaterLeft = updatePlotAndPlantWater(Utils.getUpperPlotId(plotId, plotMaxX), plotMaxX);
+            updatePlotWaterLog(Utils.getUpperPlotId(plotId, plotMaxX), plotWaterLeft, FarmSettings(_farmSettings).PLANT_NEIGHBOR_WATER_ABSORB_RATE(), true);
         }
 
         if (plotX < plotMaxX - 1) {
-            updatePlotAndPlantWater(Utils.getRightPlotId(plotId), plotMaxX);
+            plotWaterLeft = updatePlotAndPlantWater(Utils.getRightPlotId(plotId), plotMaxX);
+            updatePlotWaterLog(Utils.getRightPlotId(plotId), plotWaterLeft, FarmSettings(_farmSettings).PLANT_NEIGHBOR_WATER_ABSORB_RATE(), true);
         }
 
 
         if (plotY > 0) {
-            updatePlotAndPlantWater(Utils.getLowerPlotId(plotId, plotMaxX), plotMaxX);
+            plotWaterLeft = updatePlotAndPlantWater(Utils.getLowerPlotId(plotId, plotMaxX), plotMaxX);
+            updatePlotWaterLog(Utils.getLowerPlotId(plotId, plotMaxX), plotWaterLeft, FarmSettings(_farmSettings).PLANT_NEIGHBOR_WATER_ABSORB_RATE(), true);
         }
 
 
         if (plotX > 0) {
-            updatePlotAndPlantWater(Utils.getLeftPlotId(plotId), plotMaxX);
+            plotWaterLeft = updatePlotAndPlantWater(Utils.getLeftPlotId(plotId), plotMaxX);
+            updatePlotWaterLog(Utils.getLeftPlotId(plotId), plotWaterLeft, FarmSettings(_farmSettings).PLANT_NEIGHBOR_WATER_ABSORB_RATE(), true);
         }
 
-        // update water absorption of current plot
-        updatePlotAndPlantWater(plotId, plotMaxX);
+        plotWaterLeft = updatePlotAndPlantWater(plotId, plotMaxX);
+        updatePlotWaterLog(plotId, plotWaterLeft, FarmSettings(_farmSettings).PLANT_WATER_ABSORB_RATE(), true);
 
         userPlants[msg.sender].push(plotId);
 
@@ -198,24 +203,31 @@ contract Farm {
         uint256 plotMaxX = FarmSettings(_farmSettings).PLOT_AREA_MAX_X();
         (uint256 plotX, uint256 plotY) = Utils.getCoordinates(plotId, plotMaxX);
 
+        uint256 plotWaterLeft;
         if (plotY < FarmSettings(_farmSettings).PLOT_AREA_MAX_Y() - 1) {
-            updatePlotAndPlantWater(Utils.getUpperPlotId(plotId, plotMaxX), plotMaxX);
+            plotWaterLeft = updatePlotAndPlantWater(Utils.getUpperPlotId(plotId, plotMaxX), plotMaxX);
+            updatePlotWaterLog(Utils.getUpperPlotId(plotId, plotMaxX), plotWaterLeft, FarmSettings(_farmSettings).PLANT_NEIGHBOR_WATER_ABSORB_RATE(), false);
         }
         
 
         if (plotX < plotMaxX - 1) {
-            updatePlotAndPlantWater(Utils.getRightPlotId(plotId), plotMaxX);
+            plotWaterLeft = updatePlotAndPlantWater(Utils.getRightPlotId(plotId), plotMaxX);
+            updatePlotWaterLog(Utils.getRightPlotId(plotId), plotWaterLeft, FarmSettings(_farmSettings).PLANT_NEIGHBOR_WATER_ABSORB_RATE(), false);
         }
 
         if (plotY > 0) {
-            updatePlotAndPlantWater(Utils.getLowerPlotId(plotId, plotMaxX), plotMaxX);
+            plotWaterLeft = updatePlotAndPlantWater(Utils.getLowerPlotId(plotId, plotMaxX), plotMaxX);
+            updatePlotWaterLog(Utils.getLowerPlotId(plotId, plotMaxX), plotWaterLeft, FarmSettings(_farmSettings).PLANT_NEIGHBOR_WATER_ABSORB_RATE(), false);
+
         }
 
         if (plotX > 0) {
-            updatePlotAndPlantWater(Utils.getLeftPlotId(plotId), plotMaxX);
+            plotWaterLeft = updatePlotAndPlantWater(Utils.getLeftPlotId(plotId), plotMaxX);
+            updatePlotWaterLog(Utils.getLeftPlotId(plotId), plotWaterLeft, FarmSettings(_farmSettings).PLANT_NEIGHBOR_WATER_ABSORB_RATE(), false);
         }
 
-        updatePlotAndPlantWater(plotId, plotMaxX);
+        plotWaterLeft = updatePlotAndPlantWater(plotId, plotMaxX);
+        updatePlotWaterLog(plotId, plotWaterLeft, FarmSettings(_farmSettings).PLANT_WATER_ABSORB_RATE(), false);
 
         if (block.number >= plotPlant[plotId].overgrownBlockNumber || !getIsNowSeedGrowthSeason(plotPlant[plotId].seed)) {
             address weedProduct = FarmSettings(_farmSettings).getWeedProduct();
@@ -317,18 +329,9 @@ contract Farm {
         return surroundingPlantAbsorbRates;
     }
 
-    // returns plot plant water absorbed
-    function getPlotPlantAbsorption(uint256 plotId, uint256 blocksElapsed, uint256 absorbRate) private view returns (uint256) {
-        if (plotPlant[plotId].owner == address(0)) {
-            return 0;
-        }
-
-        return absorbRate * blocksElapsed;
-    }
-
     // updated plot plant and surrounding plant water absrobed
     // returns plot water left after absorption and current total absorb rate
-    function updatePlantWater(uint256 plotId, uint256 plotMaxX, uint256 mainPlantAbsorbRate, uint256[4] memory surroundingPlantsAbsorbRates, uint256 plotWaterLeft, uint256 blocksElapsed) private returns (uint256, uint256) {
+    function updatePlantWater(uint256 plotId, uint256 plotMaxX, uint256 mainPlantAbsorbRate, uint256[4] memory surroundingPlantsAbsorbRates, uint256 plotWaterLeft, uint256 blocksElapsed) private returns (uint256) {
         uint256 totalAbsorbRate = mainPlantAbsorbRate + surroundingPlantsAbsorbRates[0] + surroundingPlantsAbsorbRates[1] + surroundingPlantsAbsorbRates[2] + surroundingPlantsAbsorbRates[3];
 
         if ((totalAbsorbRate * blocksElapsed) > 0) {
@@ -358,35 +361,39 @@ contract Farm {
             plotWaterLeft -= totalAbsorbRate * waterBlocksAbsorbed;
         }
 
-        return (plotWaterLeft, totalAbsorbRate);
+        return plotWaterLeft;
     }
 
     // TODO: can be made more gas efficient by not accessing storage so often
-    function updatePlotAndPlantWater(uint256 plotId, uint256 plotMaxX) private {
+    // updates plant and surrounding plant water absorbed values
+    // returns plot water left after all plant absorption
+    function updatePlotAndPlantWater(uint256 plotId, uint256 plotMaxX) private returns (uint256) {
         uint256 blocksElapsed = block.number - plotWaterLog[plotId].blockNumber;
 
-        uint256 neighborWaterAbsorbRate = FarmSettings(_farmSettings).PLANT_NEIGHBOR_WATER_ABSORB_RATE();
-        uint256 plotMaxY = FarmSettings(_farmSettings).PLOT_AREA_MAX_Y();
-
-        uint256[4] memory surroundingPlantsAbsorbRates = blocksElapsed == 0 ? [uint256(0), uint256(0), uint256(0), uint256(0)] : getSurroundingPlantAbsorbRates(
+        uint256[4] memory surroundingPlantsAbsorbRates = getSurroundingPlantAbsorbRates(
             plotId,
             plotMaxX,
-            plotMaxY,
-            neighborWaterAbsorbRate
+            FarmSettings(_farmSettings).PLOT_AREA_MAX_Y(),
+            FarmSettings(_farmSettings).PLANT_NEIGHBOR_WATER_ABSORB_RATE()
         );
 
-        uint256 mainPlantWaterAbsorbRate = plotPlant[plotId].owner != address(0) ? FarmSettings(_farmSettings).PLANT_WATER_ABSORB_RATE() : 0;
-
+        uint256 defaultMainPlantWaterAbsorbRate = FarmSettings(_farmSettings).PLANT_WATER_ABSORB_RATE();
+        uint256 mainPlantWaterAbsorbRate = plotPlant[plotId].owner != address(0) ? defaultMainPlantWaterAbsorbRate : 0;
         uint256 plotTotalWater = FarmSettings(_farmSettings).PLOT_WATER_REGEN_RATE() * blocksElapsed + plotWaterLog[plotId].level;
-        // uint256 mainPlantAbsorbed = getPlotPlantAbsorption(plotId, blocksElapsed, mainPlantWaterAbsorbRate);
 
-        (uint256 plotWaterLeft, uint256 waterChangeRate) = updatePlantWater(plotId, plotMaxX, mainPlantWaterAbsorbRate, surroundingPlantsAbsorbRates, plotTotalWater, blocksElapsed);
+        return updatePlantWater(plotId, plotMaxX, mainPlantWaterAbsorbRate, surroundingPlantsAbsorbRates, plotTotalWater, blocksElapsed);
+    }
 
+    function updatePlotWaterLog(uint256 plotId, uint256 plotWaterLeft, uint256 waterChangeRateDiff, bool isDiffPositive) private {
         plotWaterLog[plotId].level = plotWaterLeft > FarmSettings(_farmSettings).PLOT_MAX_WATER() ? FarmSettings(_farmSettings).PLOT_MAX_WATER() : plotWaterLeft;
         plotWaterLog[plotId].blockNumber = block.number;
-        plotWaterLog[plotId].changeRate = waterChangeRate;
 
-        emit PlotWaterUpdate(plotId, block.number, plotWaterLog[plotId].level, waterChangeRate);
+        // if this is the plant or harvest plot - post action change rate is different
+        uint256 newChangeRate = isDiffPositive ? plotWaterLog[plotId].changeRate + waterChangeRateDiff : plotWaterLog[plotId].changeRate - waterChangeRateDiff;
+
+        plotWaterLog[plotId].changeRate = newChangeRate;
+
+        emit PlotWaterUpdate(plotId, block.number, plotWaterLog[plotId].level, newChangeRate);
     }
 
     function clearUserPlant(uint256 plotId) private {
@@ -432,10 +439,10 @@ contract Farm {
     // Used for plant water consumption calculation in front-end if the plant is on the edge of the viewable main plot
 
     // argument is same as getPlotView the leftUpperCorner of 7x7
-    // returnes 0-6 - 7 plots along Y line before main plots
-    // returnes 7-13 - 7 plots along Y line after main plots
-    // returnes 14-20 - 7 plots along X line before main plots
-    // returnes 21-27 - 7 plots along X line after main plots
+    // returns 0-6 - 7 plots along Y line before main plots
+    // returns 7-13 - 7 plots along Y line after main plots
+    // returns 14-20 - 7 plots along X line before main plots
+    // returns 21-27 - 7 plots along X line after main plots
 
     function getSurroundingWaterLogs(uint256 leftLowerCornerPlotId) public view returns (PlotWaterLog[28] memory) {
         PlotWaterLog[28] memory plotWaterLogs;

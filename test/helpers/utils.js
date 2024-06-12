@@ -71,7 +71,7 @@ const buyApprovePlantPotato = async (contracts, account, plotId) => {
   await approveERC721Tokens(contracts.plot, contracts.farm.address, account, plotId);
 
   // PLANT
-  await waitTx(
+  return await waitTx(
     contracts.farm.connect(account).plant(contracts.potatoSeed.address, plotId)
   );
 };

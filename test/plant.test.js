@@ -128,6 +128,50 @@ describe('Plant', function () {
       );
     });
 
+    it('Plant 1 seed success - updates plotWaterLog and emits PlotWaterUpdate event', async function () {
+      const plotId = '0';
+
+      const receipt = await buyApprovePlantPotato(contracts, account, plotId);
+
+      // water log
+      const plotWaterLog = await contracts.farm.getWaterLogByPlotId('0');
+      expect(plotWaterLog.changeRate.toString()).to.eq('15', 'PlotWaterLog change rate not matching');
+
+      // event
+      const events = receipt.events.filter(e => e.event === 'PlotWaterUpdate');
+
+      // 3 events: because plotId 0 has only 2 neighbors
+      if (!events || events.length !== 3) { expect.fail('No or not enough PlotWaterUpdate events'); }
+
+      // 3rd event is of the main plot
+      const { args } = contracts.farm.interface.parseLog(events[2]);
+
+      expect(args.plotId.toString()).to.eq('0', 'Event plot id not matching');
+      expect(args.changeRate.toString()).to.eq('15', 'Event water change rate not matching');
+    });
+
+    it('Plant 1 seed success - updates NEIGHBOR plotWaterLog and emits PlotWaterUpdate event', async function () {
+      const plotId = '0';
+
+      const receipt = await buyApprovePlantPotato(contracts, account, plotId);
+
+      // water log
+      const plotWaterLog = await contracts.farm.getWaterLogByPlotId('1000');
+      expect(plotWaterLog.changeRate.toString()).to.eq('4', 'PlotWaterLog change rate not matching');
+
+      // event
+      const events = receipt.events.filter(e => e.event === 'PlotWaterUpdate');
+
+      // 3 events: because plotId 0 has only 2 neighbors
+      if (!events || events.length !== 3) { expect.fail('No or not enough PlotWaterUpdate events'); }
+
+      // 3rd event is of the main plot
+      const { args } = contracts.farm.interface.parseLog(events[0]);
+
+      expect(args.plotId.toString()).to.eq('1000', 'Event plot id not matching');
+      expect(args.changeRate.toString()).to.eq('4', 'Event water change rate not matching');
+    });
+
     it('Should fail plant 1 seed - plot already planted', async function () {
       const plotId = 0;
 

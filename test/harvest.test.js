@@ -323,6 +323,89 @@ describe('Harvest', function () {
       expect(args.waterAbsorbed.toString()).to.equal('2378');
     });
 
+    it('Harvest 1 plant success - updates plotWaterLog and emits PlotWaterUpdate event', async function () {
+      // sum of all plot water would be just enough for a single plant to grow
+      const options = {
+        plotWaterRegenRate: 1,
+        plantWaterAbsorbRate: 5,
+        plotMaxWater: 1000,
+        potatoGrowthDuration: 1000,
+        potatoMinWater: 1000 * 5,
+      };
+
+      contracts = await setupContracts(options);
+      [account] = await ethers.getSigners();
+
+      await mintAndApproveTokens(contracts, account);
+
+      // upper, right, lower, left, center - order important
+      const plotId = '1001';
+
+      await buyApprovePlantPotato(contracts, account, plotId);
+
+      await helpers.mine(options.potatoGrowthDuration);
+
+      const receipt = await waitTx(contracts.farm.connect(account).harvest(plotId));
+
+      // water log
+      const plotWaterLog = await contracts.farm.getWaterLogByPlotId('1001');
+      expect(plotWaterLog.changeRate.toString()).to.eq('0', 'PlotWaterLog change rate not matching');
+
+      // event
+      const events = receipt.events.filter(e => e.event === 'PlotWaterUpdate');
+
+      // 5 events: because plotId 1001 has only 4 neighbors
+      if (!events || events.length !== 5) { expect.fail('No or not enough PlotWaterUpdate events'); }
+
+      // 5th event is of the main plot
+      const { args } = contracts.farm.interface.parseLog(events[4]);
+
+      expect(args.plotId.toString()).to.eq('1001', 'Event plot id not matching');
+      expect(args.changeRate.toString()).to.eq('0', 'Event water change rate not matching');
+    });
+
+    it('Harvest 1 plant success - updates NEIGHBOR plotWaterLog and emits PlotWaterUpdate event', async function () {
+      // sum of all plot water would be just enough for a single plant to grow
+      const options = {
+        plotWaterRegenRate: 1,
+        plantWaterAbsorbRate: 5,
+        plotMaxWater: 1000,
+        potatoGrowthDuration: 1000,
+        potatoMinWater: 1000 * 5,
+      };
+
+      contracts = await setupContracts(options);
+      [account] = await ethers.getSigners();
+
+      await mintAndApproveTokens(contracts, account);
+
+      // upper, right, lower, left, center - order important
+      const plotId = '1001';
+
+      await buyApprovePlantPotato(contracts, account, plotId);
+
+      await helpers.mine(options.potatoGrowthDuration);
+
+      const receipt = await waitTx(contracts.farm.connect(account).harvest(plotId));
+
+      // water log
+      // test is only half reliable as any plot Id will have change rate of zero initially
+      const plotWaterLog = await contracts.farm.getWaterLogByPlotId('1');
+      expect(plotWaterLog.changeRate.toString()).to.eq('0', 'PlotWaterLog change rate not matching');
+
+      // event
+      const events = receipt.events.filter(e => e.event === 'PlotWaterUpdate');
+
+      // 5 events: because plotId 1001 has only 4 neighbors
+      if (!events || events.length !== 5) { expect.fail('No or not enough PlotWaterUpdate events'); }
+
+      // 5th event is of the main plot
+      const { args } = contracts.farm.interface.parseLog(events[2]);
+
+      expect(args.plotId.toString()).to.eq('1', 'Event plot id not matching');
+      expect(args.changeRate.toString()).to.eq('0', 'Event water change rate not matching');
+    });
+
     // TODO: cleanup test
     it(`Harvest 3 plants - harvest 2, replant 1 in the same plot
       (checks plant array re-adding bug)`, async function () {
