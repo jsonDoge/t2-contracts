@@ -464,8 +464,8 @@ contract Farm {
             for (uint256 dy = 0; dy < 7; dy += 1) {
                 uint256 plotId = Utils.getPlotIdFromCoordinates(leftLowerX + 1, leftLowerY + dy, plotMaxX);
         
-                // next line + 6
-                plotWaterLogs[dy + 6] = getWaterLogByPlotId(plotId);
+                // next line + 7
+                plotWaterLogs[dy + 7] = getWaterLogByPlotId(plotId);
             }
         }
 
@@ -475,8 +475,8 @@ contract Farm {
             for (uint256 dx = 0; dx < 7; dx += 1) {
                 uint256 plotId = Utils.getPlotIdFromCoordinates(leftLowerX + dx , leftLowerY - 1, plotMaxX);
         
-                // next line + 6
-                plotWaterLogs[dx + 13] = getWaterLogByPlotId(plotId);
+                // next line + 14
+                plotWaterLogs[dx + 14] = getWaterLogByPlotId(plotId);
             }
         }
 
@@ -485,8 +485,8 @@ contract Farm {
             for (uint256 dx = 0; dx < 7; dx += 1) {
                 uint256 plotId = Utils.getPlotIdFromCoordinates(leftLowerX + dx , leftLowerY + 1, plotMaxX);
         
-                // next line + 6
-                plotWaterLogs[dx + 20] = getWaterLogByPlotId(plotId);
+                // next line + 21
+                plotWaterLogs[dx + 21] = getWaterLogByPlotId(plotId);
             }
         }
 
