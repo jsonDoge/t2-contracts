@@ -18,10 +18,10 @@ module.exports = {
   WEED_YIELD: 1,
 
   POTATO_MIN_WATER: 300 * 15, // season duration * absorb rate
-  CORN_MIN_WATER: 300 * 15 * 2,
-  CARROT_MIN_WATER: 300 * 15 * 2,
+  CORN_MIN_WATER: 150 * 15, // half season duration * absorb rate
+  CARROT_MIN_WATER: 150 * 15, // half season duration * absorb rate
 
-  SEASON_DURATION: 300, // blocks      (around 50 mins)
+  SEASON_DURATION: 300, // blocks (around 50 mins - on mumbai outdated network)
 
   PLOT_WATER_REGEN_RATE: 10, // per block
 

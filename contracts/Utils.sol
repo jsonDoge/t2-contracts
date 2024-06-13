@@ -22,11 +22,11 @@ library Utils {
     function getCurrentSeason(uint256 blockNumber, uint256 seasonDuration) public pure returns (Season) {
         uint256 modBlockNumber = blockNumber % (4 * seasonDuration);
     
-        if (modBlockNumber / seasonDuration < 1) {
+        if ((modBlockNumber / seasonDuration) < 1) {
             return Season.Winter;
-        } else if (modBlockNumber / (seasonDuration * 2) < 2) {
+        } else if (modBlockNumber / seasonDuration < 2) {
             return Season.Spring;
-        } else if (modBlockNumber / (seasonDuration * 3) < 3) {
+        } else if (modBlockNumber / seasonDuration < 3) {
             return Season.Summer;
         }
     

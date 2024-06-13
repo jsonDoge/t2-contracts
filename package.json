@@ -15,7 +15,8 @@
     "test:buy": "hardhat test ./test/buy.test.js --network hardhat",
     "test:convert": "hardhat test ./test/convert.test.js --network hardhat",
     "test:plant": "hardhat test ./test/plant.test.js --network hardhat",
-    "test:harvest": "hardhat test ./test/harvest.test.js --network hardhat"
+    "test:harvest": "hardhat test ./test/harvest.test.js --network hardhat",
+    "test:season": "hardhat test ./test/season.test.js --network hardhat"
   },
   "author": "jsonDoge",
   "license": "ISC",

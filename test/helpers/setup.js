@@ -96,6 +96,16 @@ const setupContracts = async ({
     [potatoProduct.address], [3], potatoDish.address
   );
 
+  // UTILS testing contract
+  const UtilsTest = await ethers.getContractFactory('UtilsTest', {
+    libraries: {
+      Utils: utils.address
+    }
+  });
+
+  const utilsTest = await UtilsTest.deploy();
+  await utilsTest.deployTransaction.wait();
+
   return {
     farm,
     potatoSeed,
@@ -104,6 +114,7 @@ const setupContracts = async ({
     potatoProduct,
     weedProduct,
     farmSettings,
+    utilsTest,
     stableToken
   };
 };
